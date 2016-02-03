@@ -6,16 +6,24 @@ var chalk = require('chalk');
 var yeoman = require('yeoman-generator');
 var globule = require('globule');
 var shelljs = require('shelljs');
-var bundle = false;
+
+function setPromptDefaults(prompts, answers) {
+    prompts.forEach(function (prompt) {
+        if (answers[prompt.name] === undefined) {
+            // this can be undefined if there is no default. no silver bullet.
+            answers[prompt.name] = prompt.default;
+        }
+    });
+}
 
 var Generator = module.exports = function Generator(args, options) {
-  var dependenciesInstalled = ['bundle', 'ruby'].every(function (depend) {
+  var dependenciesInstalled = ['ruby'].every(function (depend) {
     return shelljs.which(depend);
   });
 
   if (!dependenciesInstalled) {
     console.log('Looks like you\'re missing some dependencies.' +
-      '\nMake sure ' + chalk.white('Ruby') + ' and the ' + chalk.white('Bundler gem') + ' are installed, then run again.');
+      '\nMake sure ' + chalk.white('Ruby') + ' is installed, then run again.');
     shelljs.exit(1);
   }
 
@@ -30,16 +38,17 @@ var Generator = module.exports = function Generator(args, options) {
     email: this.user.git.email,
   };
 
+  this.skipInstall = options['skip-install'] || false;
+
+  // for test purposes in particular
+  this.localInstall = (this.appname == 'temp');
+  if (this.localInstall) {
+    this.bundlerPath = path.join(process.cwd(), '.gem');
+  }
+
   this.on('end', function () {
     // Clean up temp files
     spawn('rm', ['-r', '.jekyll'], { stdio: 'inherit' });
-
-    // Install Grunt and Bower dependencies
-    this.installDependencies({ skipInstall: options['skip-install'] });
-
-    if (bundle === false) {
-      console.log(chalk.yellow.bold('Bundle install failed. Try running the command yourself.'));
-    }
   });
 };
 
@@ -59,12 +68,17 @@ Generator.prototype.askForUser = function askForUser() {
     default: this.gitInfo.email
   }];
 
-  console.log(this.yeoman);
+
+  var pjson = require('../package.json');
+
+  console.log(this.yeoman||this.welcome); // changed in 0.18.7
+  console.log(chalk.green.bold('generator-jekyllrb version: ' + pjson.version));
   console.log(chalk.yellow.bold('This generator will scaffold and wire a Jekyll site. Yo, Jekyllrb!') +
     chalk.yellow('\n\nTell us a little about yourself.') + ' ☛');
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
     this.author  = props.author;
     this.email   = props.email;
 
@@ -78,24 +92,28 @@ Generator.prototype.askForTools = function askForTools() {
     name: 'cssPre',
     type: 'list',
     message: 'CSS preprocessor',
-    choices: ['Compass', 'Sass', 'None']
+    choices: ['Compass', 'Sass', 'None'],
+    default: 'None'
   },
   {
     name: 'autoPre',
     type: 'confirm',
-    message: 'Use Autoprefixer?'
+    message: 'Use Autoprefixer?',
+    default: false
   },
   {
     name: 'jsPre',
     type: 'list',
     message: 'Javascript preprocessor',
     choices: ['None', 'Coffeescript'],
+    default: 'None'
   }];
 
   console.log(chalk.yellow('\nWire tools and preprocessors.') + ' ☛');
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
     // Multiple choice 'None' to false
     this.cssPre  = props.cssPre === 'None' ? false : props.cssPre.toLowerCase();
     this.jsPre   = props.jsPre === 'None' ? false : props.jsPre.toLowerCase();
@@ -160,6 +178,7 @@ Generator.prototype.askForStructure = function askForStructure() {
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
     this.cssDir    = props.cssDir;
     this.jsDir     = props.jsDir;
     this.imgDir    = props.imgDir;
@@ -184,6 +203,7 @@ Generator.prototype.askForTemplates = function askForTemplates() {
     type: 'list',
     message: 'Site template',
     choices: ['Default Jekyll', 'HTML5 ★ Boilerplate'],
+    default: 'Default Jekyll'
   },
   {
     name: 'h5bpCss',
@@ -230,18 +250,20 @@ Generator.prototype.askForTemplates = function askForTemplates() {
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
+    this.h5bpCss       = props.h5bpCss;
+    this.h5bpJs        = props.h5bpJs;
+    this.h5bpIco       = props.h5bpIco;
+    this.h5bpDocs      = props.h5bpDocs;
+    this.h5bpAnalytics = props.h5bpAnalytics;
+    this.templateType  = props.templateType;
+
     if (props.templateType === 'Default Jekyll') {
       this.templateType = 'default';
     }
     else if (props.templateType === 'HTML5 ★ Boilerplate') {
       this.templateType = 'h5bp';
     }
-
-    this.h5bpCss       = props.h5bpCss;
-    this.h5bpJs        = props.h5bpJs;
-    this.h5bpIco       = props.h5bpIco;
-    this.h5bpDocs      = props.h5bpDocs;
-    this.h5bpAnalytics = props.h5bpAnalytics;
 
     cb();
   }.bind(this));
@@ -275,6 +297,7 @@ Generator.prototype.askForDeployment = function askForDeployment() {
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
     this.deploy       = props.deploy;
     this.deployRemote = props.deployRemote;
     this.deployBranch = props.deployBranch;
@@ -326,6 +349,7 @@ Generator.prototype.askForJekyll = function askForJekyll() {
 
   this.prompt(prompts, function (props) {
 
+    setPromptDefaults(prompts, props);
     this.jekPyg      = props.jekPyg;
     this.jekMkd      = props.jekMkd;
     this.jekPost     = props.jekPost;
@@ -372,26 +396,19 @@ Generator.prototype.editor = function editor() {
 };
 
 Generator.prototype.rubyDependencies = function rubyDependencies() {
-  var execComplete;
-
-  console.log('\nRunning ' + chalk.yellow.bold('bundle install') + ' to install the required gems.');
-
   this.conflicter.resolve(function (err) {
     if (err) {
       return this.emit('error', err);
-    }
-
-    execComplete = shelljs.exec('bundle install');
-
-    if (execComplete.code === 0) {
-      bundle = true;
     }
   });
 };
 
 Generator.prototype.jekyllInit = function jekyllInit() {
+  if (this.bundlerPath) {
+    shelljs.env['GEM_HOME'] = this.bundlerPath;
+  }
   // Create the default Jekyll site in a temp folder
-  shelljs.exec('bundle exec jekyll new ' + this.jekyllTmp);
+  shelljs.exec('jekyll new "'+ this.jekyllTmp +'"');
 };
 
 Generator.prototype.templates = function templates() {
@@ -423,7 +440,7 @@ Generator.prototype.templates = function templates() {
     // Default Jekyll files
     this.copy(path.join(this.jekyllTmp, 'index.html'), 'app/index.html');
     this.copy(path.join(this.jekyllTmp, '_layouts/post.html'), 'app/_layouts/post.html');
-    this.copy(path.join(this.jekyllTmp, 'css/main.css'), path.join('app', this.cssDir, 'main.css'));
+    this.copy(path.join(this.jekyllTmp, 'css/main.scss'), path.join('app', this.cssDir, 'main.scss'));
 
     // Jekyll files tailored for Yeoman
     this.template('conditional/template-default/_layouts/default.html', 'app/_layouts/default.html');
@@ -437,14 +454,14 @@ Generator.prototype.templates = function templates() {
     var cb = this.async();
 
     // H5BP files tailored for Yeoman and Jekyll
-    this.copy('conditional/template-h5bp/index.html', 'app/index.html');
-    this.copy('conditional/template-h5bp/_layouts/post.html', 'app/_layouts/post.html');
-    this.template('conditional/template-h5bp/_includes/scripts.html', 'app/_includes/scripts.html');
-    this.template('conditional/template-h5bp/_layouts/default.html', 'app/_layouts/default.html');
+    this.copy('conditional/template-H5BP/index.html', 'app/index.html');
+    this.copy('conditional/template-H5BP/_layouts/post.html', 'app/_layouts/post.html');
+    this.template('conditional/template-H5BP/_includes/scripts.html', 'app/_includes/scripts.html');
+    this.template('conditional/template-H5BP/_layouts/default.html', 'app/_layouts/default.html');
 
     // Google analytics include
     if (this.h5bpAnalytics) {
-      this.copy('conditional/template-h5bp/_includes/googleanalytics.html', 'app/_includes/googleanalytics.html');
+      this.copy('conditional/template-H5BP/_includes/googleanalytics.html', 'app/_includes/googleanalytics.html');
     }
 
     // Pull H5BP in from Github
@@ -504,7 +521,8 @@ Generator.prototype.templates = function templates() {
 Generator.prototype.pygments = function pygments() {
   // Pygments styles
   if (this.jekPyg) {
-    this.copy(path.join(this.jekyllTmp, 'css/syntax.css'), path.join('app', this.cssDir, 'syntax.css'));
+    // BROKEN.
+    // this.copy(path.join(this.jekyllTmp, 'css/syntax.css'), path.join('app', this.cssDir, 'syntax.css'));
   }
 };
 
@@ -540,4 +558,11 @@ Generator.prototype.jsPreprocessor = function jsPreprocessor() {
   if (this.jsPre === 'coffeescript') {
     this.template('conditional/coffee/readme.md', path.join('app', this.jsPreDir, 'readme.md'));
   }
+};
+
+// install dependencies -- needs to be at the end
+// https://github.com/robwierzbowski/generator-jekyllrb/issues/137
+Generator.prototype.install = function install() {
+  // Install Grunt and Bower dependencies
+  this.installDependencies({ skipInstall: this.skipInstall });
 };

@@ -44,53 +44,56 @@ module.exports = function (grunt) {
           '!<%%= yeoman.app %>/_bower_components/**/*'
         ],
         tasks: ['jekyll:server']
-      },
-      livereload: {
-        options: {
-          livereload: '<%%= connect.options.livereload %>'
-        },
-        files: [
-          '.jekyll/**/*.html',<% if (autoPre) { %>
-          '.tmp/<%= cssDir %>/**/*.css',<% } else { %>
-          '{.tmp,<%%= yeoman.app %>}/<%= cssDir %>/**/*.css',<% } %>
-          '{.tmp,<%%= yeoman.app %>}/<%= jsDir %>/**/*.js',
-          '<%%= yeoman.app %>/<%= imgDir %>/**/*.{gif,jpg,jpeg,png,svg,webp}'
-        ]
       }
     },
-    connect: {
-      options: {
-        port: 9000,
-        livereload: 35729,
-        // change this to '0.0.0.0' to access the server from outside
-        hostname: 'localhost'
-      },
-      livereload: {
-        options: {
-          open: true,
-          base: [
-            '.tmp',
-            '.jekyll',
-            '<%%= yeoman.app %>'
+    browserSync: {
+      server: {
+        bsFiles: {
+          src: [
+            '.jekyll/**/*.html',
+            '.tmp/css/**/*.css',
+            '{.tmp,<%%= yeoman.app %>}/<%= jsDir %>/**/*.js',
+            '{<%%= yeoman.app %>}/_bower_components/**/*.js',
+            '<%%= yeoman.app %>/img/**/*.{gif,jpg,jpeg,png,svg,webp}'
           ]
+        },
+        options: {
+          server: {
+            baseDir: [
+              '.jekyll',
+              '.tmp',
+              '<%%= yeoman.app %>'
+            ]
+          },
+          watchTask: true
         }
       },
       dist: {
         options: {
-          open: true,
-          base: [
-            '<%%= yeoman.dist %>'
-          ]
+          server: {
+            baseDir: '<%%= yeoman.dist %>'
+          }
         }
       },
       test: {
-        options: {
-          base: [
-            '.tmp',
-            '.jekyll',
-            'test',
-            '<%%= yeoman.app %>'
+        bsFiles: {
+          src: [
+            '.jekyll/**/*.html',
+            '.tmp/css/**/*.css',
+            '{.tmp,<%%= yeoman.app %>}/<%= jsDir %>/**/*.js',
+            '{<%%= yeoman.app %>}/_bower_components/**/*.js',
+            '<%%= yeoman.app %>/img/**/*.{gif,jpg,jpeg,png,svg,webp}'
           ]
+        },
+        options: {
+          server: {
+            baseDir: [
+              '.jekyll',
+              '.tmp',
+              '<%%= yeoman.app %>'
+            ]
+          },
+          watchTask: true
         }
       }
     },
@@ -114,7 +117,6 @@ module.exports = function (grunt) {
     },<% if (cssPre === 'sass') { %>
     sass: {
       options: {
-        bundleExec: true,
         debugInfo: false,
         lineNumbers: false,
         loadPath: 'app/_bower_components'
@@ -146,7 +148,6 @@ module.exports = function (grunt) {
       options: {
         // If you're using global Sass gems, require them here.
         // require: ['singularity', 'jacket'],
-        bundleExec: true,
         sassDir: '<%%= yeoman.app %>/<%= cssPreDir %>',
         cssDir: '.tmp/<%= cssDir %>',
         imagesDir: '<%%= yeoman.app %>/<%= imgDir %>',
@@ -202,7 +203,6 @@ module.exports = function (grunt) {
     },<% } %>
     jekyll: {
       options: {
-        bundleExec: true,
         config: '_config.yml,_config.build.yml',
         src: '<%%= yeoman.app %>'
       },
@@ -231,7 +231,7 @@ module.exports = function (grunt) {
     },
     usemin: {
       options: {
-        assetsDirs: '<%%= yeoman.dist %>',
+        assetsDirs: ['<%%= yeoman.dist %>', '<%%= yeoman.dist %>/<%= imgDir %>']
       },
       html: ['<%%= yeoman.dist %>/**/*.html'],
       css: ['<%%= yeoman.dist %>/<%= cssDir %>/**/*.css']
@@ -302,7 +302,7 @@ module.exports = function (grunt) {
             // Like Jekyll, exclude files & folders prefixed with an underscore.
             '!**/_*{,/**}'<% if (h5bpJs) { %>,<% } %>
             // Explicitly add any files your site needs for distribution here.
-            <% if (!h5bpJs) { %>//<% } %>'_bower_components/jquery/jquery.js',
+            <% if (!h5bpJs) { %>//<% } %>'_bower_components/jquery/jquery.min.js',
             <% if (!h5bpJs) { %>//<% } %>'favicon.ico',
             <% if (!h5bpJs) { %>//<% } %>'apple-touch*.png'
           ],
@@ -374,6 +374,13 @@ module.exports = function (grunt) {
         ]
       }
     },
+    // https://github.com/robwierzbowski/generator-jekyllrb/issues/106
+    // scsslint: {
+    //   // See https://www.npmjs.org/package/grunt-scss-lint for options.
+    //   allFiles: [
+    //     '<%%= yeoman.app %>/<%= cssPreDir %>/**/*.scss'
+    //   ]
+    // },
     concurrent: {
       server: [<% if (cssPre === 'sass') { %>
         'sass:server',<% } %><% if (cssPre === 'compass') { %>
@@ -394,14 +401,14 @@ module.exports = function (grunt) {
   // Define Tasks
   grunt.registerTask('serve', function (target) {
     if (target === 'dist') {
-      return grunt.task.run(['build', 'connect:dist:keepalive']);
+      return grunt.task.run(['build', 'browserSync:dist']);
     }
 
     grunt.task.run([
       'clean:server',
       'concurrent:server',<% if (autoPre) { %>
       'autoprefixer:dist',<% } %>
-      'connect:livereload',
+      'browserSync:server',
       'watch'
     ]);
   });
@@ -415,7 +422,7 @@ module.exports = function (grunt) {
   grunt.registerTask('test', [
   //   'clean:server',
   //   'concurrent:test',
-  //   'connect:test'
+  //   'browserSync:test'
   ]);
 
   grunt.registerTask('check', [
@@ -427,6 +434,7 @@ module.exports = function (grunt) {
     'coffee:dist',<% } %>
     'jshint:all',
     'csslint:check'
+    // 'scsslint'
   ]);
 
   grunt.registerTask('build', [
@@ -435,9 +443,9 @@ module.exports = function (grunt) {
     'jekyll:dist',
     'concurrent:dist',
     'useminPrepare',
-    'concat',<% if (autoPre) { %>
+    'concat',
+    'cssmin',<% if (autoPre) { %>
     'autoprefixer:dist',<% } %>
-    'cssmin',
     'uglify',
     'imagemin',
     'svgmin',

@@ -1,7 +1,7 @@
 {
   "name": "generator-jekyllrb",
   "description": "Supercharge Jekyll development with Yeoman. Yo, Jekyllrb!",
-  "version": "1.2.1",
+  "version": "1.4.1",
   "homepage": "https://github.com/robwierzbowski/generator-jekyllrb",
   "author": "Rob Wierzbowski <hello@robwierzbowski.com> (http://robwierzbowski.com)",
   "repository": {
@@ -16,14 +16,14 @@
   ],
   "main": "app/index.js",
   "engines": {
-    "node": ">=0.8.0",
+    "node": ">=0.10.0",
     "npm": ">=1.2.10"
   },
   "scripts": {
     "test": "mocha"
   },
   "dependencies": {
-    "yeoman-generator": "~0.13.4",
+    "yeoman-generator": "~0.18.6",
     "globule": "~0.1.0",
     "shelljs": "~0.1.4",
     "chalk": "~0.2.0"
